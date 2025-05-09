@@ -4,6 +4,7 @@
 {-# HLINT ignore "Use lambda-case" #-}
 module FundsStack (
   pullFrom,
+  pullColoredFrom,
   Sender (..),
 ) where
 
@@ -17,29 +18,37 @@ data Sender = Sender
   }
   deriving (Eq, Show)
 
-pull :: Int -> StackState [Sender]
-pull 0 = return []
-pull pulled = do
-  St.modify' compactSenders
+data ColorMode
+  = AnyColor
+  | SpecificColor (Maybe String)
+
+pull :: ColorMode -> Int -> StackState [Sender]
+pull _ 0 = return []
+pull colorMode pulled = do
+  St.modify' compactSendersTop
   top <- pop
-  case top of
-    Nothing -> return []
-    Just s | pulled <= s.amount -> do
+  case (top, colorMode) of
+    (Nothing, _) -> return []
+    (Just s, SpecificColor neededColor_) | s.color /= neededColor_ -> do
+      senders <- pull colorMode pulled
+      push s
+      return senders
+    (Just s, _) | pulled <= s.amount -> do
       Control.Monad.when (s.amount /= pulled) $
         push s{amount = s.amount - pulled}
       return [s{amount = pulled}]
-    Just s -> do
-      senders <- pull (pulled - s.amount)
-      return $ s : senders
+    (Just s, _) -> do
+      senders <- pull colorMode (pulled - s.amount)
+      return $ compactSendersTop (s : senders)
 
 {- | Avoid having split but subsequent senders with the same name (merge them together)
 
  (also handlers zero in between)
 -}
-compactSenders :: [Sender] -> [Sender]
-compactSenders store =
+compactSendersTop :: [Sender] -> [Sender]
+compactSendersTop store =
   case store of
-    hd : (Sender _ _ 0) : tl -> compactSenders (hd : tl)
+    hd : (Sender _ _ 0) : tl -> compactSendersTop (hd : tl)
     s1 : s2 : tl | s1.name == s2.name && s1.color == s2.color -> s1{amount = s1.amount + s2.amount} : tl
     _ ->
       store
@@ -48,7 +57,10 @@ compactSenders store =
 type StackState = St.State [Sender]
 
 pullFrom :: Int -> [Sender] -> ([Sender], [Sender])
-pullFrom = St.runState . pull
+pullFrom = St.runState . pull AnyColor
+
+pullColoredFrom :: Maybe String -> Int -> [Sender] -> ([Sender], [Sender])
+pullColoredFrom col = St.runState . pull (SpecificColor col)
 
 pop :: StackState (Maybe Sender)
 pop = St.state $ \acc -> case acc of

@@ -92,4 +92,70 @@ tests =
                 ]
               , []
               )
+    , testCase "pull colored (singleton)" $
+        FundsStack.pullColoredFrom
+          (Just "red")
+          2
+          [ Sender "src" (Just "red") 10
+          ]
+          @?= (
+                [ Sender "src" (Just "red") 2
+                ]
+              ,
+                [ Sender "src" (Just "red") 8
+                ]
+              )
+    , testCase "pull colored when there's another color to be filtered first" $
+        FundsStack.pullColoredFrom
+          (Just "red")
+          2
+          [ Sender "s1" (Just "blue") 10
+          , Sender "s2" (Just "red") 10
+          ]
+          @?= (
+                [ Sender "s2" (Just "red") 2
+                ]
+              ,
+                [ Sender "s1" (Just "blue") 10
+                , Sender "s2" (Just "red") 8
+                ]
+              )
+    , testCase "pull colored (complex)" $
+        FundsStack.pullColoredFrom
+          (Just "red")
+          2
+          [ Sender "s1" Nothing 5
+          , Sender "s2" (Just "red") 1
+          , Sender "s3" Nothing 10
+          , Sender "s4" (Just "red") 2
+          , Sender "s5" Nothing 5
+          ]
+          @?= (
+                [ Sender "s2" (Just "red") 1
+                , Sender "s4" (Just "red") 1
+                ]
+              ,
+                [ Sender "s1" Nothing 5
+                , Sender "s3" Nothing 10
+                , Sender "s4" (Just "red") 1
+                , Sender "s5" Nothing 5
+                ]
+              )
+    , testCase "pull colored (complex + compact output)" $
+        FundsStack.pullColoredFrom
+          (Just "red")
+          3
+          [ Sender "s0" (Just "red") 1
+          , Sender "s1" (Just "red") 1
+          , Sender "s2" Nothing 10
+          , Sender "s1" (Just "red") 1
+          ]
+          @?= (
+                [ Sender "s0" (Just "red") 1
+                , Sender "s1" (Just "red") 2
+                ]
+              ,
+                [ Sender "s2" Nothing 10
+                ]
+              )
     ]
